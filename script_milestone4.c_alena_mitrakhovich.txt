@@ -1,0 +1,3983 @@
+Script started on Sun 07 Aug 2016 06:51:39 PM EDT
+amitrakhovich@matrix:~/ipc> whoami
+amitrakhovich
+amitrakhovich@matrix:~/ipc> cat milestone4.c
+/*
+Programmer: Alena Mitrakhovich
+Program name: milestone4.c
+Date: August 7, 2016 
+
+I declare that the attached assignment is wholly my own work in accordance with Seneca Academic Policy. No part of this assignment has been copied manually or electronically from any other source (including web sites) or distributed to other students.
+Name: Alena Mitrakhovich Student ID: 115297152
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#define INVENTORY 10
+#define WIN 500
+
+//struct Player declaration 
+struct Player{
+	char playerNameFull[35];
+	char playerName;
+	int playerScore;
+	int prizeCount;
+	int playerPosition;
+	int playerPrizes[INVENTORY];
+};
+
+//function prototypes
+int getValidInteger(int, int);
+char getValidCharacter(char, char);
+void displayBoard(unsigned int size, struct Player players[], unsigned int playerCount);
+void initPlayer(struct Player *players);
+void playGame(unsigned int boardSize, struct Player players[], unsigned int playerCount);
+unsigned int playerRoll();
+int getRandom(int, int);
+char getTileType(unsigned int index, struct Player players[], unsigned int playerCount);
+void winPrize(struct Player *players);
+void winGrandPrize(struct Player *players);
+int loseItem(struct Player *players);
+int checkout(struct Player *players);
+void displayInstructions(void);
+void clearBuffer(void);
+void addToLeaderBoard(int game, struct Player *winner);
+void displayHighestScore(void);
+
+//main function
+int main(){
+	//declared variables
+	int boardSize = 1;
+	char menuCh = ' ';
+
+	struct Player players[8];
+	int playerCount = 0;
+	int counter;
+	
+	struct Player winner;
+	int game = 0;
+	int count;
+	int x = 0;
+	FILE *fp;
+
+	//header
+	printf("\nWelcome to CHECKOUT\n");
+
+	//loop the game until user enters 'q'
+	do{
+
+		//menu
+		printf("Main Menu\n\np-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:\n");
+		//validating and storing input
+		menuCh = getValidCharacter(112, 115);
+		clearBuffer();
+	
+		//play game
+		if (menuCh == 'p'){	
+
+			printf("Enter number of players: ");
+			playerCount = getValidInteger(1, 8);
+
+			//initializing all players with a loop and a function
+			for (counter = 0; counter < playerCount; counter ++){
+				initPlayer(&players[counter]);
+			}
+	
+			printf("Enter board size: ");
+			//validating and storing input
+			boardSize = getValidInteger(5, 15);
+
+			//game starts
+			playGame(boardSize, players, playerCount);
+		
+			//keeping track of game number
+			game += 1;
+		
+			//saving details of current game winner into winner struct
+			winner = players[x];
+			for (count = 1; count < playerCount; count ++){
+				if(players[count].playerScore > players[x].playerScore){
+					winner = players[count];
+				}
+			x++;
+			}
+			x = 0;
+			
+			//saving the winner for the according game number into a file
+			addToLeaderBoard(game, &winner);
+
+			clearBuffer();
+		}
+
+		//high score
+		if (menuCh == 's'){	
+
+			printf(" __\n");
+			printf("   \\_______\n");
+			printf("    \\++++++|\n ");
+			printf("    \\=====|\n");
+			printf("     0---  0\n");
+
+			fp = fopen("Leaderboard.dat", "r");
+	       		if(fp){	
+				displayHighestScore();
+			}
+			else 
+				printf("\nNo data available!\n\n");
+		}
+
+		//instructions
+		if(menuCh == 'r'){
+		
+			displayInstructions();	
+		}
+
+		//quit
+		if(menuCh == 'q'){
+	
+			printf("This game is much more fun than bash...\n");
+		}
+
+	}while(menuCh != 'q');
+
+	return 0;
+}
+
+//function validates integer input
+//function receives an acceptable range 
+//returns the chosen and validated integer 
+int getValidInteger(int low, int high){
+	int num;
+	char junk;
+
+	scanf("%d", &num);
+
+	while(num < low || num > high){
+		do {
+			scanf("%c", &junk);
+		} while (junk != '\n');
+	printf("Invalid input, try again: ");
+	scanf("%d", &num);
+	}
+
+	return num;
+}
+
+//function validates character input
+//function receives an acceptable range
+//returns the chosen and validated character
+char getValidCharacter(char low, char high){
+	char ch;
+	char junk;
+
+	scanf("%c", &ch);
+
+	while(ch < low || ch > high){
+		do{
+			scanf("%c", &junk);
+		} while (junk != '\n');
+	printf("Invalid input, try again: ");
+	scanf("%c", &ch);
+	}
+
+	return ch;
+}
+
+//function clears buffer
+void clearBuffer(void){
+	char junk;
+
+	do{
+		scanf("%c", &junk);
+	} while (junk != '\n');
+}
+
+//function displays game instructions
+void displayInstructions(void){
+
+	printf("\n*********************\n");
+	printf("* Full Game Rules *\n");
+	printf("*********************\n\n");
+	printf("Up to 8 players compete to be the first to obtain $500\n");
+	printf("Game takes place on a square board with 5 tile types\n");
+	printf("->Empty Tile: No effect\n");
+	printf("->Win Tile (W): Win a random prize\n");
+	printf("->Lose Tile (L): Lose a random prize\n");
+	printf("->Grand Prize Tile (G): Win a grand prize\n");
+	printf("->Checkout Tile (C): Sells all your prizes for cash\n");
+	printf("\nPlayers can roll 1-3 dice to determine how many tiles they move each turn\n");
+	printf("\nIf a player lands on the same tile as another player, that player steals a prize and moves 1 tile back\n\n");
+}
+
+//function adds the winner of each game to a file
+//function receives the game number and the struct of the winner
+void addToLeaderBoard(int game, struct Player *winner){
+	struct Player winnerLocal = *winner;
+	FILE *fp;
+	char file_name[] = "Leaderboard.dat";
+
+	fp = fopen(file_name, "a");
+	fprintf(fp, "GAME:%d %s (%c)-%d \n", game, winnerLocal.playerNameFull, winnerLocal.playerName, winnerLocal.playerScore);
+	fclose(fp);
+}
+
+//function displays the details of the player with the highest sore 
+//function searches through the Leaderboard.dat file
+void displayHighestScore(void){
+	//declared variables
+	char score[10];
+	int scoreNum = 0;
+	int scoreNumHigh = 0;
+	char playerNameFull[35];
+	char playerName[4];
+
+	FILE *fp;
+	char ch;
+	char ch2;
+	char ch3;
+	int i;
+	int count;
+	int counting;
+	int x = 1;
+	int y = 1;
+	int z = 1;
+	int a = 1;
+	int recordNum = 0;
+	int recordNum2 = 0;
+	int recordNum3 = 0;
+	int recordNumHigh = 0;
+	int notEmpty = 0;
+
+	//searching for highest score
+	fp = fopen("Leaderboard.dat", "r");
+
+		//continue looping while x is true
+		//loops through the entire file
+		while (x && ch != EOF){
+			//gets one character at a time from the file until dash is found
+			if('-' == (ch = fgetc(fp))){
+				//loop stores the score
+				for(i = 0; i < 10; i++){
+					score[i] = fgetc(fp);
+					//once it finds a space
+					if(score[i] == ' '){
+						//null character stored to make a string
+						score[i] = '\0';
+						//converting a string to an integer for comparisson
+						scoreNum = atoi(score);
+						recordNum+=1;
+						if (scoreNum > scoreNumHigh){
+							scoreNumHigh = scoreNum;
+							//storing the record number of the highest score
+							recordNumHigh = recordNum;
+						}
+						//exiting loop
+						i = 10;
+					}
+				}	
+			x = 0;
+			}
+			x = 1;
+		}
+
+	fclose(fp);
+
+	//searching for name of player with highest score
+	fp = fopen("Leaderboard.dat", "r");
+		while(y && ch2 != EOF){
+			if (' ' == (ch2 = fgetc(fp))){
+				for(count = 0; count < 35; count++){
+					playerNameFull[count] = fgetc(fp);
+					if(playerNameFull[count] == '('){
+						playerNameFull[count] = '\0';
+						recordNum2+=1;
+
+						while(z){
+							ch2 = fgetc(fp);
+							if (ch2 == ' '){
+								z = 0;
+							}
+						}
+						count = 35;
+
+					}
+				}
+			y = 0;	
+			}
+			y = 1;
+			//exit the loop to keep the playerNameFull at the record number of the highest score without overwriting
+			if (recordNum2 == recordNumHigh)
+				y = 0;
+		}
+	fclose(fp);
+
+	//searching for player's ID with highest score
+	fp = fopen("Leaderboard.dat", "r");
+		while(a && ch3 != EOF){
+			if ('(' == (ch3 = fgetc(fp))){
+					playerName[0] = ch3;
+				for(counting = 1; counting < 4; counting++){
+					playerName[counting] = fgetc(fp);
+					if(playerName[counting] == '-'){
+						playerName[counting] = '\0';
+						recordNum3+=1;
+
+						while(z){
+							ch2 = fgetc(fp);
+							if (ch2 == ' '){
+								z = 0;
+							}
+						}
+						count = 4;
+					}
+				}
+			a = 0;	
+			}
+			a = 1;
+			//exit the loop to keep the playerNameFull at the record number of the highest score without overwriting
+			if (recordNum3 == recordNumHigh)
+				a = 0;
+		}
+	fclose(fp);
+
+	printf("*****************************\n");
+	printf("Player With the Highest Score\n");
+	printf("*****************************\n");
+	printf("Player Name	ID	Score\n");
+	printf("%12s%6s%11d\n", playerNameFull, playerName, scoreNumHigh);
+}
+
+//function initializes player values
+//function receives pointer to Player struct being initialized
+void initPlayer(struct Player *players){
+	struct Player playersLocal;
+
+	playersLocal.playerScore = 0;
+	playersLocal.prizeCount = 0;
+	playersLocal.playerPosition = 0;
+	char junk;
+	int counter;
+	int i;
+	int flag = 0; 
+
+	for(counter = 0; counter < INVENTORY; counter ++){
+		playersLocal.playerPrizes[counter] = 0;
+	}
+
+	clearBuffer();
+
+	printf("Enter player name: ");
+	for(i = 0; i < 35 && flag == 0; i++){
+		scanf("%c", &playersLocal.playerNameFull[i]);
+		if(playersLocal.playerNameFull[i] == '\n'){
+			flag = 1;
+			playersLocal.playerNameFull[i] = '\0';
+		}
+	}
+
+	printf("Enter player ID: ");
+	scanf("%c", &playersLocal.playerName);
+
+	*players = playersLocal;
+}
+
+//function starts the game
+//funcion is passed the size of the board, Player struct array, and number of players
+void playGame(unsigned int boardSize, struct Player players[], unsigned int playerCount){
+	//declared variables
+	int counter;
+	int sum = 0;
+	char type = ' ';
+	int lost = 0;
+	int value = 0;
+	int counter2;
+	int counter3;
+	
+	int slot = 0;
+	int check;
+	int flag2 = 0;
+	int count;
+	int check2;
+	
+	//loop with a condition to win
+	do{
+		//loop for one player at a time
+		for (counter2 = 0; counter2 < playerCount && value == 0; counter2++){
+			displayBoard(boardSize, players, playerCount);
+	
+			printf("%s's (%c) turn, ", players[counter2].playerNameFull, players[counter2].playerName);
+			sum = playerRoll();
+	
+			printf("\nAdvancing %d spaces\n", sum);
+	
+			//adding sum to position to move the user accordingly on the board 
+			players[counter2].playerPosition += sum;
+
+			if (players[counter2].playerPosition < (boardSize*4)-4)
+				players[counter2].playerPosition = players[counter2].playerPosition;
+			else if (players[counter2].playerPosition >= ((boardSize*4)-4))
+				players[counter2].playerPosition = players[counter2].playerPosition - ((boardSize*4)-4);
+
+			//steal prize rule
+			for (counter3 = 0; counter3 < playerCount; counter3++){
+
+				//if current player's position matches another player's position
+				if (players[counter2].playerPosition == players[counter3].playerPosition && counter3 != counter2){
+
+					if(players[counter2].prizeCount >= INVENTORY){
+					printf("You were unable to steal a prize, your inventory is already full!\n");
+					}
+
+					//if matched player's prizeCount has inventory and current player has space
+					if (players[counter3].prizeCount > 0 && players[counter2].prizeCount < INVENTORY){
+						for (check = 0; check < INVENTORY && flag2 == 0; check++){
+							//finding a prize
+							lost = players[counter3].playerPrizes[check];
+							players[counter3].playerPrizes[check] -= lost;
+							if (lost > 0){
+							printf("You stole a prize from %c valued at %d!\n", players[counter3].playerName, lost);
+							//decrementing prize count
+							players[counter3].prizeCount -= 1;
+							//finding empty slot to store the prize
+							for (count = 0; count < INVENTORY; count++){
+								check2 = players[counter2].playerPrizes[count];
+								if (check2 == 0)
+								slot = count;
+								//to exit loop
+								count = INVENTORY + 1;
+								//storing prize in current player's inventory
+								players[counter2].playerPrizes[slot] = lost;
+							}
+							//incrementing prize count
+							players[counter2].prizeCount += 1;
+							flag2 = 1;
+							}
+						}
+					}
+
+					else if (players[counter3].prizeCount == 0 && players[counter2].prizeCount < INVENTORY){
+					printf("You were unable to steal from %c! No prizes in their inventory!\n", players[counter3].playerName);
+					}
+
+					//current player moves 1 step back
+					players[counter2].playerPosition = players[counter2].playerPosition - 1;
+					counter3 = 0;
+	
+				}
+			}
+
+			//checking which tile type applies 
+			if ((players[counter2].playerPosition % 3) == 0 && (players[counter2].playerPosition % 5) != 0 && (players[counter2].playerPosition % 7) != 0){
+				type = 'W';
+				printf("'W' win regular prize\n");
+				winPrize(&players[counter2]);
+			}
+
+			else if ((players[counter2].playerPosition % 5) == 0 && (players[counter2].playerPosition % 7) != 0){
+				type = 'L';
+				printf("'L' lose random prize\n");
+				lost = loseItem(&players[counter2]);
+				if (lost == 0){
+					printf("Player did not have any prizes in inventory to lose!\n");
+				}
+				else {
+					printf("Player lost a prize valued at %d!\n", lost);
+				}
+			}
+
+			else if ((players[counter2].playerPosition % 7) == 0 && players[counter2].playerPosition != 0){
+				type = 'G';
+				printf("'G' win grand prize\n");
+				winGrandPrize(&players[counter2]);
+			}
+
+			else if (players[counter2].playerPosition == 0){
+				type = 'C';
+				printf("'C' convert prizes\n");
+				value = checkout(&players[counter2]);
+			}
+
+			else
+			printf("Nothing happens, go again\n");
+	
+		}	
+	}while(value == 0);
+}
+
+//function returns a random number based on the range passed
+int getRandom(int low, int high){
+	int ranNum;
+
+	//srand(time(NULL));
+
+	ranNum = rand() % (high - low) + low;
+
+	return ranNum;
+}
+
+//function returns the sum of the dice rolled based on random numbers
+unsigned int playerRoll(){
+	int roll = 0;
+	int counter;
+	int roll2 = 0;
+	int sum = 0;
+
+	printf("how many dice will you roll: ");
+	roll = getValidInteger(1, 3);
+	
+	printf("You rolled: ");
+	for(counter = 0; counter < roll; counter ++){
+		//passing 1 and 7 because of how getRandom function calculates/limits range
+		//this will derive between 1 and 6 inclusive
+		roll2 = getRandom(1, 7);
+		printf("%d ", roll2);
+		sum += roll2;
+	}
+
+	return sum;
+}
+
+//function displays an according character in each tile
+//index is passed as the tile number (kept track of in displayBoard function)
+//number of total players and a player struct are passed
+char getTileType(unsigned int index, struct Player players[], unsigned int playerCount){
+
+	char type;
+	char check = ' ';
+	int counter;
+	
+	//checking if there is a player to display on that tile
+	for (counter = 0; counter < playerCount; counter++){
+		if (index == players[counter].playerPosition){
+			check = players[counter].playerName;
+			counter = playerCount;
+		}
+	}
+
+	if (check != ' ')
+		type = check;
+
+	else if (index == 0)
+	       type = 'C';
+
+	else if ( (index % 3) == 0 && (index % 5) != 0 && (index % 7) != 0 )
+		type = 'W';
+	
+	else if ( (index % 5) == 0 && (index % 7) != 0 )
+ 		type = 'L';
+	
+	else if ( (index % 7) == 0 )
+		type = 'G';
+	
+	else 
+		type = ' ';	
+
+	return type;
+}
+
+//function displays the board
+void displayBoard(unsigned int size, struct Player players[], unsigned int playerCount){
+	int counter;
+	int tileNum = 0;
+	char tileCh = ' ';
+	int rowNum;
+	int tileNum2 = 0;
+
+	//printing top row
+	for (counter = 0; counter < size; counter ++){
+		printf(" ___ ");
+	}
+	printf("\n");
+	for (counter = 0; counter < size; counter ++){
+		//keeping track of the tileNum with counter
+		tileNum = counter;
+		//calling get displayTile function to store according character
+		tileCh = getTileType(tileNum, players, playerCount);
+		//displaying according character
+		printf("| %c |", tileCh);
+	}
+	printf("\n");
+	for (counter = 0; counter < size; counter ++){
+		printf("|___|");
+	}
+	printf("\n");
+
+
+	//printing middle rows
+	//formulas to determine left hand side column and righthand side column positions of middle rows
+	tileNum = (size * 4) - 5;
+	tileNum2 = size;
+
+	//loop for the middle rows
+	for (rowNum = (size - 2); rowNum > 0; rowNum --){
+		for (counter = 0; counter < size; counter ++){
+			if (counter == 0 || counter == (size - 1))
+				printf(" ___ ");
+			else 
+				printf("     ");
+		}
+		
+		printf("\n");
+
+		for (counter = 0; counter < size; counter ++){
+			//right hand size colum
+			if (counter == 0){
+				tileCh = getTileType(tileNum, players, playerCount);	
+				printf("| %c |", tileCh);
+				tileNum--;
+			}
+			//left hand side column
+			else if (counter == (size - 1)){
+				tileCh = getTileType(tileNum2, players, playerCount);
+				printf("| %c |", tileCh);
+				tileNum2++;
+			}
+			else
+				printf("     ");
+		}
+		printf("\n");
+
+		//printing bottom of box for left column and right column of middle rows or empty spaces otherwise
+		for (counter = 0; counter < size; counter ++){
+			if (counter == 0 || counter == (size - 1))
+				printf("|___|");
+			else
+				printf("     ");
+		}
+		printf("\n");
+	}
+
+	//printing last row
+	if (size > 1){
+		for (counter = 0; counter < size; counter ++){
+			printf(" ___ ");
+		}	
+		printf("\n");
+		tileNum = (size * 3) - 3;
+		for (counter = 0; counter < size; counter ++){ 
+			tileCh = getTileType(tileNum, players, playerCount);
+			printf("| %c |", tileCh);
+			tileNum --;
+		}	
+		printf("\n");
+		for (counter = 0; counter < size; counter ++){
+			printf("|___|");
+		}
+	}
+	printf("\n\n");
+}
+
+//function for win prize
+void winPrize(struct Player *players){
+	struct Player playersLocal = *players;
+	int prize = 0;
+	int counter;
+	int check;
+	int slot;
+
+	//srand(time(NULL));
+
+	//random prize is generated between 10-99
+	prize = getRandom(10, 100);
+	
+	//checking if there is space to store more prizes
+	if (playersLocal.prizeCount < INVENTORY){
+		//looking for an empty slot and storing the prize there
+		for (counter = 0; counter < INVENTORY; counter++){
+			check = playersLocal.playerPrizes[counter];
+			if (check == 0){
+				slot = counter;
+				//to exit loop
+				counter = INVENTORY + 1;
+				playersLocal.prizeCount += 1;
+				printf("You won a prize of %d\n", prize);
+				playersLocal.playerPrizes[slot] = prize;
+			}
+		}
+	}
+
+	else if (playersLocal.prizeCount >= INVENTORY){
+		printf("Your inventory of prizes is full\n");
+	}
+
+	*players = playersLocal;
+}
+
+//function for win grand prize 
+void winGrandPrize(struct Player *players){
+	struct Player playersLocal = *players;
+	int prize = 0;
+	int counter;
+	int check;
+	int slot;
+
+	//srand(time(NULL));
+	
+	//random prize is generated between 100 - 200 inclusively
+	prize = getRandom(100, 201);
+	
+	//checking if there is space to store more prizes
+	if (playersLocal.prizeCount < INVENTORY){
+		//looking for an empty slot and storing prize there
+		for (counter = 0; counter < INVENTORY; counter++){
+			check = playersLocal.playerPrizes[counter];
+			if (check == 0){
+				slot = counter;
+				//to exit loop
+				counter = INVENTORY + 1;
+				playersLocal.prizeCount += 1;
+				printf("You won a prize of %d\n", prize);
+				playersLocal.playerPrizes[slot] = prize;
+			}
+		}
+	}
+
+	else if (playersLocal.prizeCount >= INVENTORY){
+		printf("Your inventory of prizes is full\n");
+	}
+
+	*players = playersLocal;
+}
+
+//function for lose item
+//function receives a player struct and picks a prize to delete at random
+int loseItem(struct Player *players){
+	struct Player playersLocal = *players;
+	int counter;
+	int check;
+	int slot;
+	int lostPrize = 0;
+
+	//srand(time(NULL));
+
+	//finding a random number 0-9 
+	slot = rand() % 10;
+
+	if (playersLocal.prizeCount == 0){
+		lostPrize = 0;
+	}
+
+	//if prizes are held
+	else if (playersLocal.prizeCount > 0) {
+		//checking if playerPrize at random slot has a prize
+		for(counter = 0; counter < INVENTORY; counter++){
+			check = playersLocal.playerPrizes[slot];
+			//if there is a prize at that slot
+			if (check > 0){
+				//setting lostPrize to the value of slot
+				lostPrize = playersLocal.playerPrizes[slot];
+				//deleting the lostPrize from that slot
+				playersLocal.playerPrizes[slot] -= lostPrize;
+				//decrementing prizeCount
+				playersLocal.prizeCount -= 1;
+				//to exit loop
+				counter = INVENTORY + 1;
+			}
+			//if there is no prize at that slot
+			else if (check == 0){
+				//finding another random number 0-9 to check
+				slot = rand() % 10;
+			}
+		}
+	}
+
+	*players = playersLocal;
+
+	//returning value of lostPrize
+	return lostPrize;
+}
+
+//function for checkout
+//function receives a player struct
+int checkout(struct Player *players){
+	struct Player playersLocal = *players;
+	int counter;
+	int trfl;
+	float score = 0;
+
+	//values are added and stored into score 
+	for (counter = 0; counter < INVENTORY; counter ++){
+		score += playersLocal.playerPrizes[counter];
+		playersLocal.playerPrizes[counter] = 0;
+	}
+	
+	//re-setting prizeCount to zero
+	playersLocal.prizeCount = 0;
+
+	//now adding the new obtained score to any previous playerScore stored
+	playersLocal.playerScore += score;
+
+	//printing value of current checkout
+	printf("You checked out for $%.2f", score);
+	//priting value of total score (previous checkouts added)
+	printf(" score is now $%.2f\n", (float)playersLocal.playerScore);
+
+		printf(" __\n");
+		printf("   \\_______\n");
+		printf("    \\++++++|\n ");
+		printf("    \\=====|\n");
+		printf("     0---  0\n");
+
+	if(playersLocal.playerScore >= WIN)
+		printf("You won the game!!! :D\n");
+
+	//returning 1 for true(win) and 0 for false(no win)
+	if (playersLocal.playerScore >= WIN)
+		trfl = 1;
+	else if (playersLocal.playerScore < WIN)
+		trfl = 0;
+	
+	*players = playersLocal;
+
+	return trfl;
+}
+amitrakhovich@matrix:~/ipc> gcc milestone4.c
+amitrakhovich@matrix:~/ipc> a.out
+
+Welcome to CHECKOUT
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+r
+
+*********************
+* Full Game Rules *
+*********************
+
+Up to 8 players compete to be the first to obtain $500
+Game takes place on a square board with 5 tile types
+->Empty Tile: No effect
+->Win Tile (W): Win a random prize
+->Lose Tile (L): Lose a random prize
+->Grand Prize Tile (G): Win a grand prize
+->Checkout Tile (C): Sells all your prizes for cash
+
+Players can roll 1-3 dice to determine how many tiles they move each turn
+
+If a player lands on the same tile as another player, that player steals a prize and moves 1 tile back
+
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+s
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+
+No data available!
+
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+p
+Enter number of players: 2
+Enter player name: Pikachoo P
+Enter player ID: !
+Enter player name: Charmad nd C
+Enter player ID: @
+Enter board size: 5
+ ___  ___  ___  ___  ___ 
+| ! ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 2
+You rolled: 2 5 
+Advancing 7 spaces
+'G' win grand prize
+You won a prize of 154
+ ___  ___  ___  ___  ___ 
+| @ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | ! |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 2
+You rolled: 2 6 
+Advancing 8 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | ! |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || @ |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 2
+You rolled: 2 5 
+Advancing 7 spaces
+'G' win grand prize
+You won a prize of 130
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| ! |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || @ |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 2
+You rolled: 4 2 
+Advancing 6 spaces
+You stole a prize from ! valued at 154!
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| ! |               | W |
+|___|               |___|
+ ___                 ___ 
+| @ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 3
+You rolled: 3 2 3 
+Advancing 8 spaces
+'W' win regular prize
+You won a prize of 89
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | ! |
+|___|               |___|
+ ___                 ___ 
+| @ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 3
+You rolled: 6 5 1 
+Advancing 12 spaces
+'W' win regular prize
+You won a prize of 46
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | ! |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || @ ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 3
+You rolled: 5 5 6 
+Advancing 16 spaces
+'W' win regular prize
+You won a prize of 18
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | ! |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || @ ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 3
+You rolled: 4 4 3 
+Advancing 11 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || @ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | ! |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 3
+You rolled: 3 3 2 
+Advancing 8 spaces
+'G' win grand prize
+You won a prize of 120
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || @ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| ! |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 2
+You rolled: 2 6 
+Advancing 8 spaces
+'W' win regular prize
+You won a prize of 82
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| ! |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| @ ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 2
+You rolled: 1 1 
+Advancing 2 spaces
+'C' convert prizes
+You checked out for $357.00 score is now $357.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| ! ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| @ ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 3
+You rolled: 6 4 2 
+Advancing 12 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| ! ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || @ |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 3
+You rolled: 5 2 5 
+Advancing 12 spaces
+'W' win regular prize
+You won a prize of 79
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| ! ||   || L || W || @ |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 2
+You rolled: 4 4 
+Advancing 8 spaces
+'C' convert prizes
+You checked out for $282.00 score is now $282.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| @ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| ! ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 3
+You rolled: 6 3 2 
+Advancing 11 spaces
+'G' win grand prize
+You won a prize of 187
+ ___  ___  ___  ___  ___ 
+| @ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | ! |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 2
+You rolled: 3 6 
+Advancing 9 spaces
+'W' win regular prize
+You won a prize of 40
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | ! |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || @ ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| ! |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || @ ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 3
+You rolled: 5 2 3 
+Advancing 10 spaces
+'W' win regular prize
+You won a prize of 36
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || @ ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| ! |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 2
+You rolled: 4 3 
+Advancing 7 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || @ || ! |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 86
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || ! |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | @ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | ! |
+|___|               |___|
+ ___                 ___ 
+| G |               | @ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+'L' lose random prize
+Player lost a prize valued at 86!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | ! |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || @ || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+'W' win regular prize
+You won a prize of 84
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || @ || ! ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+'G' win grand prize
+You won a prize of 127
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| @ |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || ! ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 43
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| @ |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| ! ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || @ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| ! ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'G' win grand prize
+You won a prize of 130
+ ___  ___  ___  ___  ___ 
+| C || @ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| ! |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || @ || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| ! |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || ! || @ || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'L' lose random prize
+Player lost a prize valued at 36!
+ ___  ___  ___  ___  ___ 
+| C || ! ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | @ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || ! |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | @ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'G' win grand prize
+You won a prize of 200
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || ! |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | @ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'L' lose random prize
+Player lost a prize valued at 84!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | ! |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | @ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+'W' win regular prize
+You won a prize of 46
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | ! |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| @ ||   || L || W ||   |
+|___||___||___||___||___|
+
+Pikachoo P's (!) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'W' win regular prize
+You won a prize of 39
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | ! |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| @ ||   || L || W ||   |
+|___||___||___||___||___|
+
+Charmand C's (@) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+'C' convert prizes
+You checked out for $413.00 score is now $695.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+You won the game!!! :D
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+s
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+*****************************
+Player With the Highest Score
+*****************************
+Player Name	ID	Score
+ Charmand C    (@)        695
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+p
+Enter number of players: 2
+Enter player name: mom
+Enter player ID: *
+Enter player name: dad
+Enter player ID: $
+Enter board size: 5
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 5 3 
+Advancing 8 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| $ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 4 6 
+Advancing 10 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || $ |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 3
+You rolled: 4 1 5 
+Advancing 10 spaces
+'W' win regular prize
+You won a prize of 66
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| * ||   || L || W || $ |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 2 3 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| $ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| * ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'L' lose random prize
+Player lost a prize valued at 66!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| $ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 4 2 
+Advancing 6 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 3
+You rolled: 6 4 6 
+Advancing 16 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 3
+You rolled: 4 2 4 
+Advancing 10 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 6 4 
+Advancing 10 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || $ || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'C' convert prizes
+You checked out for $0.00 score is now $0.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || $ || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| * || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 5 6 
+Advancing 11 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || * || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 6 3 
+Advancing 9 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || * || $ || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 4 3 
+Advancing 7 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 6 4 
+Advancing 10 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 6 1 
+Advancing 7 spaces
+'W' win regular prize
+You won a prize of 28
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 5 6 
+Advancing 11 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| $ |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 4 1 
+Advancing 5 spaces
+'G' win grand prize
+You won a prize of 200
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| $ |               | L |
+|___|               |___|
+ ___                 ___ 
+| * |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 3 2 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| * |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 3 4 
+Advancing 7 spaces
+'L' lose random prize
+Player lost a prize valued at 200!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 6 6 
+Advancing 12 spaces
+'C' convert prizes
+You checked out for $0.00 score is now $0.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| $ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 5 3 
+Advancing 8 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| $ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 3 2 
+Advancing 5 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'L' lose random prize
+Player lost a prize valued at 28!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 3 5 
+Advancing 8 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| $ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 3
+You rolled: 1 5 6 
+Advancing 12 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| $ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || * || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 3
+You rolled: 3 4 4 
+Advancing 11 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || * || L || W || $ |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 6 2 
+Advancing 8 spaces
+'W' win regular prize
+You won a prize of 19
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || $ |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| $ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 3
+You rolled: 5 6 6 
+Advancing 17 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| $ |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 5 6 
+Advancing 11 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || $ |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || * || W || $ |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 3
+You rolled: 4 1 4 
+Advancing 9 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || * || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 3 5 
+Advancing 8 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'W' win regular prize
+You won a prize of 53
+ ___  ___  ___  ___  ___ 
+| C ||   || * || $ ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || $ ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 96
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || $ || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || $ || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'W' win regular prize
+You won a prize of 28
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| $ ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+'W' win regular prize
+You won a prize of 37
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | * |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| $ ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || $ || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | * |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'G' win grand prize
+You won a prize of 197
+ ___  ___  ___  ___  ___ 
+| C ||   || $ || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | * |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 4 1 
+Advancing 5 spaces
+You stole a prize from * valued at 19!
+'W' win regular prize
+You won a prize of 93
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | * |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 3 6 
+Advancing 9 spaces
+'C' convert prizes
+You checked out for $234.00 score is now $234.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || $ || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'W' win regular prize
+You won a prize of 74
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | * |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || $ || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'W' win regular prize
+You won a prize of 75
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | * |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| $ ||   || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| $ || * || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2
+You rolled: 3 5 
+Advancing 8 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || * || L || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 1
+You rolled: 4 
+Advancing 4 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'L' lose random prize
+Player lost a prize valued at 93!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 5 3 
+Advancing 8 spaces
+'G' win grand prize
+You won a prize of 110
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | * |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 3
+You rolled: 5 6 5 
+Advancing 16 spaces
+'L' lose random prize
+Player lost a prize valued at 96!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | * |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 2
+You rolled: 2 1 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 98
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || * ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 3
+You rolled: 6 1 3 
+Advancing 10 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+mom's (*) turn, how many dice will you roll: 3
+You rolled: 5 1 1 
+Advancing 7 spaces
+'C' convert prizes
+You checked out for $282.00 score is now $516.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+You won the game!!! :D
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+s
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+*****************************
+Player With the Highest Score
+*****************************
+Player Name	ID	Score
+ Charmand C    (@)        695
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+p
+Enter number of players: 2
+Enter player name: dad
+Enter player ID: $
+Enter player name: cat
+Enter player ID: *
+Enter board size: 5
+ ___  ___  ___  ___  ___ 
+| $ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'W' win regular prize
+You won a prize of 78
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 5 1 
+Advancing 6 spaces
+You stole a prize from $ valued at 78!
+'L' lose random prize
+Player lost a prize valued at 78!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'G' win grand prize
+You won a prize of 135
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | $ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 6 4 
+Advancing 10 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | $ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'L' lose random prize
+Player lost a prize valued at 135!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| * |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 2 3 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| $ |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 2 6 
+Advancing 8 spaces
+'W' win regular prize
+You won a prize of 39
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| $ |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| * ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| * ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 4 4 
+Advancing 8 spaces
+You were unable to steal from $! No prizes in their inventory!
+'W' win regular prize
+You won a prize of 83
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 2 3 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'G' win grand prize
+You won a prize of 183
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | $ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 1 5 
+Advancing 6 spaces
+'G' win grand prize
+You won a prize of 116
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| * |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | $ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| * |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || $ |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 1 1 
+Advancing 2 spaces
+'C' convert prizes
+You checked out for $238.00 score is now $238.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || $ |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'L' lose random prize
+Player did not have any prizes in inventory to lose!
+ ___  ___  ___  ___  ___ 
+| * ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 3 1 
+Advancing 4 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || $ || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'C' convert prizes
+You checked out for $183.00 score is now $183.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+ ___  ___  ___  ___  ___ 
+| $ ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 1 4 
+Advancing 5 spaces
+'W' win regular prize
+You won a prize of 83
+ ___  ___  ___  ___  ___ 
+| $ ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 2 2 
+Advancing 4 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || $ ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'G' win grand prize
+You won a prize of 192
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | $ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 4 3 
+Advancing 7 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | $ |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'W' win regular prize
+You won a prize of 71
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || * |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || $ ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 3 6 
+Advancing 9 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || $ ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+'L' lose random prize
+Player lost a prize valued at 192!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| $ |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+| * |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 1 5 
+Advancing 6 spaces
+'W' win regular prize
+You won a prize of 10
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| $ |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 2 1
+You rolled: 5 
+Advancing 5 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 5 6 
+Advancing 11 spaces
+'G' win grand prize
+You won a prize of 192
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W || $ |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| * |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'W' win regular prize
+You won a prize of 70
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| * |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 3 5 
+Advancing 8 spaces
+'L' lose random prize
+Player lost a prize valued at 192!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 90
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | * |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || $ ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 2 4 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W || * || L || $ ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 89
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| $ || * || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 5 3 
+Advancing 8 spaces
+'W' win regular prize
+You won a prize of 48
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || * ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| $ ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 6 
+Advancing 6 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || $ || * ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 3 3 
+Advancing 6 spaces
+'W' win regular prize
+You won a prize of 94
+ ___  ___  ___  ___  ___ 
+| C ||   || $ || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'L' lose random prize
+Player lost a prize valued at 71!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || * ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 4 5 
+Advancing 9 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | $ |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 1 
+Advancing 1 spaces
+'W' win regular prize
+You won a prize of 65
+ ___  ___  ___  ___  ___ 
+| C ||   || * || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 3 5 
+Advancing 8 spaces
+'L' lose random prize
+Player lost a prize valued at 94!
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | $ |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || * || W ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 3 
+Advancing 3 spaces
+'W' win regular prize
+You won a prize of 70
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || * || $ ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 2 5 
+Advancing 7 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C || * ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| G |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || $ ||   |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 5 
+Advancing 5 spaces
+'G' win grand prize
+You won a prize of 177
+ ___  ___  ___  ___  ___ 
+| C || * ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| $ |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W ||   |
+|___||___||___||___||___|
+
+cat's (*) turn, how many dice will you roll: 2
+You rolled: 5 2 
+Advancing 7 spaces
+Nothing happens, go again
+ ___  ___  ___  ___  ___ 
+| C ||   ||   || W ||   |
+|___||___||___||___||___|
+ ___                 ___ 
+| L |               | L |
+|___|               |___|
+ ___                 ___ 
+| $ |               | W |
+|___|               |___|
+ ___                 ___ 
+|   |               | G |
+|___|               |___|
+ ___  ___  ___  ___  ___ 
+| W ||   || L || W || * |
+|___||___||___||___||___|
+
+dad's ($) turn, how many dice will you roll: 1
+You rolled: 2 
+Advancing 2 spaces
+'C' convert prizes
+You checked out for $561.00 score is now $744.00
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+You won the game!!! :D
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+s
+ __
+   \_______
+    \++++++|
+     \=====|
+     0---  0
+*****************************
+Player With the Highest Score
+*****************************
+Player Name	ID	Score
+
+GAME:3 dad    ($)        744
+Main Menu
+
+p-(p)lay q-(q)uit r-inst(r)uctions s-HI(s)core:
+q
+This game is much more fun than bash...
+amitrakhovich@matrix:~/ipc> cat Leaderboard.dat
+GAME:1 Charmand C (@)-695 
+GAME:2 mom (*)-516 
+GAME:3 dad ($)-744 
+amitrakhovich@matrix:~/ipc> exit
+exit
+
+Script done on Sun 07 Aug 2016 06:58:06 PM EDT
